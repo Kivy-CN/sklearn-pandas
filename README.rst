@@ -5,44 +5,45 @@ Sklearn-pandas
 .. image:: https://circleci.com/gh/pandas-dev/sklearn-pandas.svg?style=svg
     :target: https://circleci.com/gh/pandas-dev/sklearn-pandas
 
-This module provides a bridge between `Scikit-Learn <http://scikit-learn.org/stable>`__'s machine learning methods and `pandas <https://pandas.pydata.org>`__-style Data Frames.
+这个模块的扮演了桥梁的角色，联通了`Scikit-Learn <http://scikit-learn.org/stable>`__'中的机器学习方法和 `pandas <https://pandas.pydata.org>`的数据结构DataFrame。
 
-In particular, it provides:
+具体来说，此模块提供了下面的功能:
 
-1. A way to map ``DataFrame`` columns to transformations, which are later recombined into features.
-2. A compatibility shim for old ``scikit-learn`` versions to cross-validate a pipeline that takes a pandas ``DataFrame`` as input. This is only needed for ``scikit-learn<0.16.0`` (see `#11 <https://github.com/paulgb/sklearn-pandas/issues/11>`__ for details). It is deprecated and will likely be dropped in ``skearn-pandas==2.0``.
-3. A couple of special transformers that work well with pandas inputs: ``CategoricalImputer`` and ``FunctionTransformer`.`
+1. 映射 ``DataFrame`` 的列（columns）到SKlearn里面的变换（transformations）, 后续就可以重新组合成特征（features）。
+2. 使老版本的SKlearn能兼容使用pandas ``DataFrame``作为输入（input）的pipeline来进行交叉验证（cross-validate）。这种兼容仅是针对 ``scikit-learn<0.16.0`` (具体参考 `#11 <https://github.com/paulgb/sklearn-pandas/issues/11>`)。目前已经不被支持（deprecated），在未来的版本``skearn-pandas==2.0``中可能就去掉了。
+3. 还提供了一些适于处理pandas输入（inputs）的特殊转换（special transformers）: ``CategoricalImputer``和``FunctionTransformer``
 
-Installation
+安装
 ------------
 
-You can install ``sklearn-pandas`` with ``pip``::
+使用``pip``就可以安装 ``sklearn-pandas``::
 
     # pip install sklearn-pandas
 
-Tests
+测试
 -----
 
-The examples in this file double as basic sanity tests. To run them, use ``doctest``, which is included with python::
+
+本文的例子中就有一些基本的测试，可以使用``doctest`来运行，如下所示::
 
     # python -m doctest README.rst
 
-Usage
+使用
 -----
 
-Import
+导入
 ******
 
-Import what you need from the ``sklearn_pandas`` package. The choices are:
+首先自然是要从``sklearn_pandas``导入你需要的包，可以选择下面的:
 
-* ``DataFrameMapper``, a class for mapping pandas data frame columns to different sklearn transformations
-* ``cross_val_score``, similar to ``sklearn.cross_validation.cross_val_score`` but working on pandas DataFrames
+* ``DataFrameMapper``, 这个类是用于映射pandas DataFrame 的雷（columns）到不同的 SKlearn 变换（transformations）
+* ``cross_val_score``, 类似于``sklearn.cross_validation.cross_val_score``，不同是处理的是 pandas DataFrames
 
-For this demonstration, we will import both::
+这里为了演示，两个都导入了::
 
     >>> from sklearn_pandas import DataFrameMapper, cross_val_score
 
-For these examples, we'll also use pandas, numpy, and sklearn::
+在本文的例子中，还要导入用到的 pandas, numpy, sklearn::
 
     >>> import pandas as pd
     >>> import numpy as np
@@ -50,45 +51,49 @@ For these examples, we'll also use pandas, numpy, and sklearn::
     ...     sklearn.linear_model, sklearn.pipeline, sklearn.metrics
     >>> from sklearn.feature_extraction.text import CountVectorizer
 
-Load some Data
+载入数据
 **************
 
-Normally you'll read the data from a file, but for demonstration purposes we'll create a data frame from a Python dict::
 
+一般来说你都是从文件载入读取数据的吧，不过这里为了演示目的就直接用Python的dict创建一个pandas 的DataFrame了::
     >>> data = pd.DataFrame({'pet':      ['cat', 'dog', 'dog', 'fish', 'cat', 'dog', 'cat', 'fish'],
     ...                      'children': [4., 6, 3, 3, 2, 3, 5, 4],
     ...                      'salary':   [90., 24, 44, 27, 32, 59, 36, 27]})
 
-Transformation Mapping
+变换映射（Transformation Mapping）
 ----------------------
 
-Map the Columns to Transformations
+映射列（Columns）到变换（Transformations）
 **********************************
 
-The mapper takes a list of tuples. The first element of each tuple is a column name from the pandas DataFrame, or a list containing one or multiple columns (we will see an example with multiple columns later). The second element is an object which will perform the transformation which will be applied to that column. The third one is optional and is a dictionary containing the transformation options, if applicable (see "custom column names for transformed features" below).
+映射器（mapper）接收的是一个元组列表（a list of tuples）。每个元组的第一个元素是pandas DataFrame 里面的列名（column name），或者是一个包含了一列或多列的列表（多列的例子后面会讲到）。第二个元素是要对这个列进行变换的一个对象（object）。第三个是可选的，如果可用的话就是一个字典（dict），包含了变换选项（transformation options），具体可以参考后文中的"为变换特征（ transformed features）设定列名（custom column names）"这部分。
 
-Let's see an example::
+看一个例子::
 
     >>> mapper = DataFrameMapper([
     ...     ('pet', sklearn.preprocessing.LabelBinarizer()),
     ...     (['children'], sklearn.preprocessing.StandardScaler())
     ... ])
 
-The difference between specifying the column selector as ``'column'`` (as a simple string) and ``['column']`` (as a list with one element) is the shape of the array that is passed to the transformer. In the first case, a one dimensional array will be passed, while in the second case it will be a 2-dimensional array with one column, i.e. a column vector.
 
-This behaviour mimics the same pattern as pandas' dataframes ``__getitem__``  indexing:
+这里的列选择器可以指定为 ``'column'`` (一个简单字符串string) 或者 ``['column']`` (单元素列表list)，二者的区别就是传递到转换器（transformer）的数组形状。前者传递的是一个一维数组（1-dimensional array）；而后者则传递了一个单列（one column）的二维数组（2-dimensional array），也就是列向量（column vector）。
+
+
+上述行为是模仿了pandas 中 DataFrame 的``__getitem__``索引（indexin）的模式:
+
 
     >>> data['children'].shape
     (8,)
     >>> data[['children']].shape
     (8, 1)
 
-Be aware that some transformers expect a 1-dimensional input (the label-oriented ones) while some others, like ``OneHotEncoder`` or ``Imputer``, expect 2-dimensional input, with the shape ``[n_samples, n_features]``.
+要注意有的变换器（transformers）要求一维输入（比如面向标签的the label-oriented ones），而另外一些比如 ``OneHotEncoder`` 或者 ``Imputer``则要求二维输入，形状为``[n_samples, n_features]``。
 
-Test the Transformation
+
+测试变换（Test the Transformation）
 ***********************
 
-We can use the ``fit_transform`` shortcut to both fit the model and see what transformed data looks like. In this and the other examples, output is rounded to two digits with ``np.round`` to account for rounding errors on different hardware::
+使用``fit_transform``既可以拟合模型，也可以查看变换后的数据是啥样。在本文的这些例子中，使用了``np.round``将输出四舍五入到小数点后两位，考虑到了不同硬件平台的舍入误差::
 
     >>> np.round(mapper.fit_transform(data.copy()), 2)
     array([[ 1.  ,  0.  ,  0.  ,  0.21],
@@ -100,33 +105,29 @@ We can use the ``fit_transform`` shortcut to both fit the model and see what tra
            [ 1.  ,  0.  ,  0.  ,  1.04],
            [ 0.  ,  0.  ,  1.  ,  0.21]])
 
-Note that the first three columns are the output of the ``LabelBinarizer`` (corresponding to ``cat``, ``dog``, and ``fish`` respectively) and the fourth column is the standardized value for the number of children. In general, the columns are ordered according to the order given when the ``DataFrameMapper`` is constructed.
 
-Now that the transformation is trained, we confirm that it works on new data::
+注意前面三列是``LabelBinarizer``的输出（对应的分别是 ``cat``, ``dog``, ``fish`` ），第四列是子数目的标准化值（standardized value for the number of children）。一般来说，这些列的排序是对应着``DataFrameMapper``构建的时候给出的顺序。
+
+接下来就要训练这个变换了，要确定能够用于新数据::
 
     >>> sample = pd.DataFrame({'pet': ['cat'], 'children': [5.]})
     >>> np.round(mapper.transform(sample), 2)
     array([[1.  , 0.  , 0.  , 1.04]])
 
 
-Output features names
+输出特征名（Output features names）
 *********************
 
-In certain cases, like when studying the feature importances for some model,
-we want to be able to associate the original features to the ones generated by
-the dataframe mapper. We can do so by inspecting the automatically generated ``transformed_names_`` attribute of the mapper after transformation::
+在具体案例中，比如学习某些模型的特征重要性（feature importances），我们想要能将原始特征和dataframe映射器生成的特征连接起来。在变换之后，通过检查映射器（mapper）自动生成的``transformed_names_``属性（attribute）就可以实现::
 
     >>> mapper.transformed_names_
     ['pet_cat', 'pet_dog', 'pet_fish', 'children']
 
 
-Custom column names for transformed features
+为变换特征设定列名（Custom column names for transformed features）
 ********************************************
 
-We can provide a custom name for the transformed features, to be used instead
-of the automatically generated one, by specifying it as the third argument
-of the feature definition::
-
+除了使用自动生成的列名，我们还可以对变换后的特征提供一系列设定的名字，只要在特征定义的时候将其作为第三个参数（argument）即可::
 
   >>> mapper_alias = DataFrameMapper([
   ...     (['children'], sklearn.preprocessing.StandardScaler(),
@@ -137,16 +138,13 @@ of the feature definition::
   ['children_scaled']
 
 
-Passing Series/DataFrames to the transformers
+传递 Series/DataFrames 给变换器（transformers）
 *********************************************
 
-By default the transformers are passed a numpy array of the selected columns
-as input. This is because ``sklearn`` transformers are historically designed to
-work with numpy arrays, not with pandas dataframes, even though their basic
-indexing interfaces are similar.
+默认情况下变换器要求传递的是一个numpy的数组，由选中的列组成，作为输入。这是因为``sklearn``的变换器（transformers）在其发展早期就是被设计用来处理numpy数组的，而不是pandas的DataFrame，不过这两者的基本索引界面倒是很相似。
 
-However we can pass a dataframe/series to the transformers to handle custom
-cases initializing the dataframe mapper with ``input_df=True``::
+不过我们可以通过使用``input_df=True``来初始化 DataFrame 映射器（mapper），然后就可以传递Series/DataFrames给变换器（transformers）::
+
 
     >>> from sklearn.base import TransformerMixin
     >>> class DateEncoder(TransformerMixin):
@@ -167,8 +165,8 @@ cases initializing the dataframe mapper with ``input_df=True``::
            [2015,   11,    1],
            [2015,   11,    2]])
 
-We can also specify this option per group of columns instead of for the
-whole mapper::
+
+上述方法是针对整个映射器（mapper）进行的，还可以针对具体的每一组列来进行这样的设定::
 
   >>> mapper_dates = DataFrameMapper([
   ...     ('dates', DateEncoder(), {'input_df': True})
@@ -179,10 +177,10 @@ whole mapper::
          [2015,   11,    1],
          [2015,   11,    2]])
 
-Outputting a dataframe
+输出一个 DataFrame
 **********************
 
-By default the output of the dataframe mapper is a numpy array. This is so because most sklearn estimators expect a numpy array as input. If however we want the output of the mapper to be a dataframe, we can do so using the parameter ``df_out`` when creating the mapper::
+DataFrame映射器（mapper）的默认输出是numpy数组。这是因为大多数SKlearn的估计器（estimator）都接收numpy数组作为输入。如果我们想让映射器输出一个DataFrame，可以在创建映射器的时候增加参数``df_out``来实现::
 
     >>> mapper_df = DataFrameMapper([
     ...     ('pet', sklearn.preprocessing.LabelBinarizer()),
@@ -199,21 +197,23 @@ By default the output of the dataframe mapper is a numpy array. This is so becau
     6        1        0         0      1.04
     7        0        0         1      0.21
 
-The names for the columns are the same ones present in the ``transformed_names_``
-attribute.
 
-Note this does not work together with the ``default=True`` or ``sparse=True`` arguments to the mapper.
+列名就和 ``transformed_names_``属性中的一样。
 
-Transform Multiple Columns
+要注意，上述方法不适于设定了``default=True``或者``sparse=True`` 参数的映射器。
+
+变换多列（Transform Multiple Columns）
 **************************
 
-Transformations may require multiple input columns. In these cases, the column names can be specified in a list::
+有的变换（Transformations）可能需要多个输入列。这时候这些列就可以用一个列表来指定::
+
 
     >>> mapper2 = DataFrameMapper([
     ...     (['children', 'salary'], sklearn.decomposition.PCA(1))
     ... ])
 
-Now running ``fit_transform`` will run PCA on the ``children`` and ``salary`` columns and return the first principal component::
+
+这时候运行 ``fit_transform``就会在 ``children`` 和 ``salary``这两列上运行主成分分析（PCA），然后返回的就是第一主要成分（first principal component）::
 
     >>> np.round(mapper2.fit_transform(data.copy()), 1)
     array([[ 47.6],
@@ -225,11 +225,11 @@ Now running ``fit_transform`` will run PCA on the ``children`` and ``salary`` co
            [ -6.4],
            [-15.4]])
 
-Multiple transformers for the same column
+单列的多变换（Multiple transformers for the same column）
 *****************************************
 
-Multiple transformers can be applied to the same column specifying them
-in a list::
+
+用于单列的多个变换（transformaer）也可以用一个列表来指定::
 
     >>> mapper3 = DataFrameMapper([
     ...     (['age'], [sklearn.preprocessing.Imputer(),
@@ -241,10 +241,12 @@ in a list::
            [ 1.22474487]])
 
 
-Columns that don't need any transformation
+
+无需变换的列
 ******************************************
 
-Only columns that are listed in the DataFrameMapper are kept. To keep a column but don't apply any transformation to it, use `None` as transformer::
+
+只有在 DataFrameMapper 中列出的列会保存。要保存一个列又不对其进行任何变换，可以使用`None` 所谓变换器（transformer）::
 
     >>> mapper3 = DataFrameMapper([
     ...     ('pet', sklearn.preprocessing.LabelBinarizer()),
@@ -260,11 +262,11 @@ Only columns that are listed in the DataFrameMapper are kept. To keep a column b
            [1., 0., 0., 5.],
            [0., 0., 1., 4.]])
 
-Applying a default transformer
+
+使用默认变换器（default transformer）
 ******************************
 
-A default transformer can be applied to columns not explicitly selected
-passing it as the ``default`` argument to the mapper:
+默认变换器可以用于没有明确选择的列，只要带着``default``参数传递到映射器（mapper）即可::
 
     >>> mapper4 = DataFrameMapper([
     ...     ('pet', sklearn.preprocessing.LabelBinarizer()),
@@ -280,21 +282,16 @@ passing it as the ``default`` argument to the mapper:
            [ 1. ,  0. ,  0. ,  5. , -0.3],
            [ 0. ,  0. ,  1. ,  4. , -0.7]])
 
-Using ``default=False`` (the default) drops unselected columns. Using
-``default=None`` pass the unselected columns unchanged.
+
+默认设置是``default=False``，这时候会去掉未选择的列。如果设置``default=None``就会将未选择的列不进行任何变化保存下来。
 
 
-Same transformer for the multiple columns
+对多列的同变换（Same transformer for the multiple columns）
 *****************************************
 
-Sometimes it is required to apply the same transformation to several dataframe columns.
-To simplify this process, the package provides ``gen_features`` function which accepts a list
-of columns and feature transformer class (or list of classes), and generates a feature definition,
-acceptable by ``DataFrameMapper``.
+有时候需要对几个不同的DataFrame的列应用同样的变换。要简化这个过程，我们可以使用``gen_features``函数，这个函数接受一个列（columns）的列表和特征变换类（或者类列表），然后生成一个特征定义，可以被``DataFrameMapper`接收。
 
-For example, consider a dataset with three categorical columns, 'col1', 'col2', and 'col3',
-To binarize each of them, one could pass column names and ``LabelBinarizer`` transformer class
-into generator, and then use returned definition as ``features`` argument for ``DataFrameMapper``:
+举个例子，设想某个数据集有三个分类列：'col1', 'col2', 'col3'。要对每个都进行二值化（binarize），可以传递列名称和``LabelBinarizer`` 变换类到生成器（generator），然后使用返回的定义作为用于 ``DataFrameMapper``的``features`` 参数::
 
     >>> from sklearn_pandas import gen_features
     >>> feature_def = gen_features(
@@ -314,9 +311,8 @@ into generator, and then use returned definition as ``features`` argument for ``
            [0, 0, 2],
            [1, 0, 1]])
 
-If it is required to override some of transformer parameters, then a dict with 'class' key and
-transformer parameters should be provided. For example, consider a dataset with missing values.
-Then the following code could be used to override default imputing strategy:
+
+如果需要覆盖某些变换参数，就需要用一个字典，包含有'class' 键值（key）和变换器参数。例如处理一个有缺失数据值的数据集就会如此。然后接下来的代码可以用来覆盖默认归因策略（imputing strategy）::
 
     >>> feature_def = gen_features(
     ...     columns=[['col1'], ['col2'], ['col3']],
@@ -336,10 +332,10 @@ Then the following code could be used to override default imputing strategy:
            [3., 1., 0.]])
 
 
-Feature selection and other supervised transformations
+特征选择和其他监督变换 
 ******************************************************
 
-``DataFrameMapper`` supports transformers that require both X and y arguments. An example of this is feature selection. Treating the 'pet' column as the target, we will select the column that best predicts it.
+``DataFrameMapper`` 支持同时要求X和y参数的变换器。例如特征选择。将'pet'这一列作为目标，就可以选择能进行最佳预测的列。
 
     >>> from sklearn.feature_selection import SelectKBest, chi2
     >>> mapper_fs = DataFrameMapper([(['children','salary'], SelectKBest(chi2, k=1))])
@@ -353,10 +349,10 @@ Feature selection and other supervised transformations
            [36.],
            [27.]])
 
-Working with sparse features
+处理稀疏特征（sparse features）
 ****************************
 
-A ``DataFrameMapper`` will return a dense feature array by default. Setting ``sparse=True`` in the mapper will return a sparse array whenever any of the extracted features is sparse. Example:
+默认情况下``DataFrameMapper``会返回一个密集特征数组（dense feature array）。在映射器（mapper）中设置``sparse=True``则会返回一个稀疏数组，无论提取的特征是否稀疏。例如::
 
     >>> mapper5 = DataFrameMapper([
     ...     ('pet', CountVectorizer()),
@@ -364,14 +360,16 @@ A ``DataFrameMapper`` will return a dense feature array by default. Setting ``sp
     >>> type(mapper5.fit_transform(data))
     <class 'scipy.sparse.csr.csr_matrix'>
 
-The stacking of the sparse features is done without ever densifying them.
+这些稀疏特征（sparse features）的叠加（stacking）是在未致密化（densifying）的情况下实现的。
 
-Cross-Validation
+
+交叉验证（Cross-Validation）
 ****************
 
-Now that we can combine features from pandas DataFrames, we may want to use cross-validation to see whether our model works. ``scikit-learn<0.16.0`` provided features for cross-validation, but they expect numpy data structures and won't work with ``DataFrameMapper``.
 
-To get around this, sklearn-pandas provides a wrapper on sklearn's ``cross_val_score`` function which passes a pandas DataFrame to the estimator rather than a numpy array::
+通过上面的示范，现在咱们就可以将pandas DataFrame 的特征结合起来了，可以使用交叉验证来检测咱们的模型是否正常工作。``scikit-learn<0.16.0`` 提供了交叉验证的功能，但只接收numpy数据结构体，不能使用``DataFrameMapper``。
+
+为了解决这个问题，sklearn-pandas 对SKlearn的``cross_val_score``函数进行了打包，传递一个pandas DataFrame过去而不用传递numpy数组::
 
     >>> pipe = sklearn.pipeline.Pipeline([
     ...     ('featurize', mapper),
@@ -379,17 +377,15 @@ To get around this, sklearn-pandas provides a wrapper on sklearn's ``cross_val_s
     >>> np.round(cross_val_score(pipe, X=data.copy(), y=data.salary, scoring='r2'), 2)
     array([ -1.09,  -5.3 , -15.38])
 
-Sklearn-pandas' ``cross_val_score`` function provides exactly the same interface as sklearn's function of the same name.
+Sklearn-pandas的 ``cross_val_score`` 函数提供的界面和SKlearn里面的同名函数完全相同。
 
 ``CategoricalImputer``
 **********************
 
-Since the ``scikit-learn``  ``Imputer`` transformer currently only works with
-numbers, ``sklearn-pandas`` provides an equivalent helper transformer that
-works with strings, substituting null values with the most frequent value in
-that column. Alternatively, you can specify a fixed value to use.
 
-Example: imputing with the mode:
+由于目前（2018年12月15日）``scikit-learn``  ``Imputer`` 的变换器（transformer）都只能处理数值，``sklearn-pandas``提供了一个等效的辅助变换器（equivalent helper transformer），能处理字符串和用列中最频繁的值来替代空值。或者你也可以指定使用某一个固定值。
+
+例子：使用众数:
 
     >>> from sklearn_pandas import CategoricalImputer
     >>> data = np.array(['a', 'b', 'b', np.nan], dtype=object)
@@ -397,7 +393,7 @@ Example: imputing with the mode:
     >>> imputer.fit_transform(data)
     array(['a', 'b', 'b', 'b'], dtype=object)
 
-Example: imputing with a fixed value:
+例子：使用某值:
 
     >>> from sklearn_pandas import CategoricalImputer
     >>> data = np.array(['a', 'b', 'b', np.nan], dtype=object)
@@ -406,12 +402,13 @@ Example: imputing with a fixed value:
     array(['a', 'b', 'b', 'a'], dtype=object)
 
 
-``FunctionTransformer``
+函数变换器``FunctionTransformer``
 ***********************
 
-Often one wants to apply simple transformations to data such as ``np.log``. ``FunctionTransformer`` is a simple wrapper that takes any function and applies vectorization so that it can be used as a transformer.
 
-Example:
+有时候可能需要对数据进行简单变换，比如取对数，要用到``np.log``。``FunctionTransformer``是一个简单的打包可以接收任意函数，然后进行向量化（applies vectorization），使其可以被用作变换器（transformer）
+
+样例:
 
     >>> from sklearn_pandas import FunctionTransformer
     >>> array = np.array([10, 100])
@@ -420,7 +417,7 @@ Example:
     >>> transformer.fit_transform(array)
     array([1., 2.])
 
-Changelog
+更新记录（不翻译了）
 ---------
 
 1.8.0 (2018-12-01)
